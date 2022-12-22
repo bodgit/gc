@@ -273,3 +273,22 @@ func newMemoryCard(capacity, encoding uint16) (*memoryCard, error) {
 
 	return mc, nil
 }
+
+// DetectMemoryCard works out if the io.ReaderAt r pointing to the data of size
+// bytes looks sufficiently like a GameCube memory card image.
+func DetectMemoryCard(r io.ReaderAt, size int64) (bool, error) {
+	h := new(header)
+	if size >= int64(binary.Size(h)) {
+		sr := io.NewSectionReader(r, 0, int64(binary.Size(h)))
+
+		if err := binary.Read(sr, binary.BigEndian, h); err != nil {
+			return false, fmt.Errorf("unable to read header: %w", err)
+		}
+
+		if (h.Encoding == EncodingANSI || h.Encoding == EncodingSJIS) && size == int64(h.size()) {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
