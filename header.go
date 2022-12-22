@@ -3,9 +3,12 @@ package gc
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 
 	"github.com/bodgit/gc/internal/hash"
 )
+
+var errBadHeaderChecksum = errors.New("bad header checksum")
 
 const (
 	headerReserved1Size   = 0x0004
@@ -81,13 +84,17 @@ func (h *header) checksum() error {
 	return nil
 }
 
-func (h *header) isValid() (bool, error) {
+func (h *header) isValid() error {
 	normal, inverted, err := h.generateChecksums()
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	c1, c2 := h.Checksum[checksumNormal][:], h.Checksum[checksumInverted][:]
 
-	return bytes.Equal(c1, normal) && bytes.Equal(c2, inverted), nil
+	if !bytes.Equal(c1, normal) || !bytes.Equal(c2, inverted) {
+		return errBadHeaderChecksum
+	}
+
+	return nil
 }

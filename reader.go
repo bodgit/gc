@@ -14,8 +14,6 @@ import (
 	"time"
 )
 
-var errInvalidCard = errors.New("invalid card")
-
 type fileReader struct {
 	io.ReadCloser
 	f *File
@@ -158,14 +156,6 @@ func (r *Reader) init(nr io.Reader) error {
 
 	if err := r.mc.unmarshalBinary(nr); err != nil {
 		return err
-	}
-
-	if ok, err := r.mc.isValid(); err != nil || !ok {
-		if err != nil {
-			return err
-		}
-
-		return errInvalidCard
 	}
 
 	r.CardSize, r.Encoding = r.mc.header.CardSize, r.mc.header.Encoding

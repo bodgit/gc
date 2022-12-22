@@ -108,25 +108,22 @@ func (mc *memoryCard) checksum() error {
 	return nil
 }
 
-func (mc *memoryCard) isValid() (bool, error) {
-	ok, err := mc.header.isValid()
-	if err != nil || !ok {
-		return ok, err
+func (mc *memoryCard) isValid() error {
+	if err := mc.header.isValid(); err != nil {
+		return err
 	}
 
 	for i := 0; i < copies; i++ {
-		ok, err = mc.directory[i].isValid()
-		if err != nil || !ok {
-			return ok, err
+		if err := mc.directory[i].isValid(); err != nil {
+			return err
 		}
 
-		ok, err = mc.blockMap[i].isValid()
-		if err != nil || !ok {
-			return ok, err
+		if err := mc.blockMap[i].isValid(); err != nil {
+			return err
 		}
 	}
 
-	return true, nil
+	return nil
 }
 
 func validateCardSize(capacity uint16) error {
@@ -174,7 +171,7 @@ func (mc *memoryCard) unmarshalBinary(r io.Reader) error {
 		return errTrailingBytes
 	}
 
-	return nil
+	return mc.isValid()
 }
 
 func (mc *memoryCard) UnmarshalBinary(b []byte) error {

@@ -3,9 +3,12 @@ package gc
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 
 	"github.com/bodgit/gc/internal/hash"
 )
+
+var errBadBlockMapChecksum = errors.New("bad block map checksum")
 
 type blockMap struct {
 	Checksum           [checksums][hash.Size]byte
@@ -47,13 +50,17 @@ func (m *blockMap) checksum() error {
 	return nil
 }
 
-func (m *blockMap) isValid() (bool, error) {
+func (m *blockMap) isValid() error {
 	normal, inverted, err := m.generateChecksums()
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	c1, c2 := m.Checksum[checksumNormal][:], m.Checksum[checksumInverted][:]
 
-	return bytes.Equal(c1, normal) && bytes.Equal(c2, inverted), nil
+	if !bytes.Equal(c1, normal) || !bytes.Equal(c2, inverted) {
+		return errBadBlockMapChecksum
+	}
+
+	return nil
 }

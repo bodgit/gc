@@ -3,12 +3,15 @@ package gc
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"io"
 	"time"
 
 	"github.com/bodgit/gc/internal/hash"
 	"github.com/bodgit/plumbing"
 )
+
+var errBadDirectoryChecksum = errors.New("bad directory checksum")
 
 const (
 	entryReserved1Offset = 0x06
@@ -135,13 +138,17 @@ func (d *directory) checksum() error {
 	return nil
 }
 
-func (d *directory) isValid() (bool, error) {
+func (d *directory) isValid() error {
 	normal, inverted, err := d.generateChecksums()
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	c1, c2 := d.Checksum[checksumNormal][:], d.Checksum[checksumInverted][:]
 
-	return bytes.Equal(c1, normal) && bytes.Equal(c2, inverted), nil
+	if !bytes.Equal(c1, normal) || !bytes.Equal(c2, inverted) {
+		return errBadDirectoryChecksum
+	}
+
+	return nil
 }
