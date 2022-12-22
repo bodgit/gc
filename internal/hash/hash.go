@@ -34,8 +34,7 @@ func (d *digest) Write(p []byte) (int, error) {
 		}
 
 		d.crc += uint16(t) << (d.pos * shiftWidth)
-		d.pos++
-		d.pos %= 2
+		d.pos ^= 1
 	}
 
 	return len(p), nil
