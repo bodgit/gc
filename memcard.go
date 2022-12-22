@@ -8,6 +8,9 @@ import (
 	"io"
 )
 
+// Based on http://hitmen.c02.at/files/yagcd/yagcd/chap12.html#sec12 and
+// https://github.com/suloku/gcmm/blob/master/source/raw.h
+
 // Supported memory card sizes.
 const (
 	MemoryCard59 = 4 << iota
@@ -18,6 +21,7 @@ const (
 	MemoryCard2043
 )
 
+// Supported memory card encodings.
 const (
 	EncodingANSI = iota
 	EncodingSJIS

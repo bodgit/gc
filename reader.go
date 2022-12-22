@@ -25,6 +25,7 @@ func (fr *fileReader) Stat() (fs.FileInfo, error) {
 	return headerFileInfo{&fr.f.FileHeader}, nil
 }
 
+// A File is a single file within a memory card.
 type File struct {
 	FileHeader
 	GameCode  string
@@ -34,6 +35,9 @@ type File struct {
 	e *entry
 }
 
+// Open returns an fs.File that provides access to the File's contents. The
+// file is prefixed with a 64 byte header (the directory entry) followed by one
+// or more 8 KiB blocks. Multiple files may be read concurrently.
 func (f *File) Open() (fs.File, error) {
 	m := f.r.mc.activeBlockMap()
 
@@ -60,16 +64,19 @@ func (f *File) Open() (fs.File, error) {
 	return &fileReader{io.NopCloser(io.MultiReader(readers...)), f}, nil
 }
 
+// FileHeader describes a file within a memory card.
 type FileHeader struct {
 	Name     string
 	Modified time.Time
 	Size     int64
 }
 
+// FileInfo returns an fs.FileInfo for the FileHeader.
 func (h *FileHeader) FileInfo() fs.FileInfo {
 	return headerFileInfo{h}
 }
 
+// Mode returns the permission and mode bits for the FileHeader.
 func (h *FileHeader) Mode() fs.FileMode {
 	return 0o444 //nolint:gomnd
 }
@@ -133,21 +140,17 @@ func (e *fileListEntry) ModTime() time.Time {
 
 func (e *fileListEntry) Info() (fs.FileInfo, error) { return e, nil }
 
+// A Reader serves content from a memory card image.
 type Reader struct {
 	File []*File
 
 	mc *memoryCard
 
+	CardSize uint16
+	Encoding uint16
+
 	fileListOnce sync.Once
 	fileList     []fileListEntry
-}
-
-func (r *Reader) CardSize() uint16 {
-	return r.mc.header.CardSize
-}
-
-func (r *Reader) Encoding() uint16 {
-	return r.mc.header.Encoding
 }
 
 func (r *Reader) init(nr io.Reader) error {
@@ -164,6 +167,8 @@ func (r *Reader) init(nr io.Reader) error {
 
 		return errInvalidCard
 	}
+
+	r.CardSize, r.Encoding = r.mc.header.CardSize, r.mc.header.Encoding
 
 	r.File = make([]*File, 0, r.mc.count())
 
@@ -325,6 +330,9 @@ func (d *openDir) ReadDir(count int) ([]fs.DirEntry, error) {
 	return list, nil
 }
 
+// Open opens the named file in the memory card image, using the semantics of
+// fs.FS.Open: paths are always slash separated, with no leading / or ../
+// elements.
 func (r *Reader) Open(name string) (fs.File, error) {
 	r.initFileList()
 
@@ -344,11 +352,13 @@ func (r *Reader) Open(name string) (fs.File, error) {
 	return e.file.Open()
 }
 
+// A ReadCloser is a Reader that must be closed when no longer needed.
 type ReadCloser struct {
 	Reader
 	f *os.File
 }
 
+// Close closes the memory card image, rendering it unusable for I/O.
 func (rc *ReadCloser) Close() error {
 	if err := rc.f.Close(); err != nil {
 		return fmt.Errorf("unable to close: %w", err)
@@ -357,6 +367,7 @@ func (rc *ReadCloser) Close() error {
 	return nil
 }
 
+// NewReader returns a new Reader reading from r.
 func NewReader(r io.Reader) (*Reader, error) {
 	mcr := new(Reader)
 	if err := mcr.init(r); err != nil {
@@ -366,10 +377,12 @@ func NewReader(r io.Reader) (*Reader, error) {
 	return mcr, nil
 }
 
+// OpenReader will open the memory card image specified by name and return a
+// ReadCloser.
 func OpenReader(name string) (*ReadCloser, error) {
 	f, err := os.Open(name)
 	if err != nil {
-		return nil, fmt.Errorf("unable too open: %w", err)
+		return nil, fmt.Errorf("unable to open: %w", err)
 	}
 
 	r := new(ReadCloser)

@@ -12,14 +12,12 @@ import (
 var (
 	errDuplicateName = errors.New("duplicate name")
 	errInvalidLength = errors.New("invalid length")
-	errNameMismatch  = errors.New("name mismatch")
 	errNoFreeSpace   = errors.New("no free space")
 )
 
 type fileWriter struct {
-	name string
-	buf  *bytes.Buffer
-	w    *Writer
+	buf *bytes.Buffer
+	w   *Writer
 }
 
 func (w *fileWriter) maxSize() int {
@@ -41,6 +39,8 @@ func (w *fileWriter) Close() error {
 	w.w.mu.Lock()
 	defer w.w.mu.Unlock()
 
+	delete(w.w.fw, w)
+
 	mc := w.w.mc
 
 	e := new(entry)
@@ -48,15 +48,21 @@ func (w *fileWriter) Close() error {
 		return fmt.Errorf("unable to read header: %w", err)
 	}
 
-	if e.filename() != w.name {
-		return errNameMismatch
+	for _, x := range mc.directory[mc.activeDirectory()].Entries {
+		if x.isEmpty() {
+			continue
+		}
+
+		if x.filename() == e.filename() {
+			return errDuplicateName
+		}
 	}
 
 	if w.buf.Len() != int(e.FileLength)*blockSize {
 		return errInvalidLength
 	}
 
-	if mc.count() == 127 || e.FileLength > mc.blockMap[mc.activeBlockMap()].FreeBlocks {
+	if mc.count() == maxEntries || e.FileLength > mc.blockMap[mc.activeBlockMap()].FreeBlocks {
 		return errNoFreeSpace
 	}
 
@@ -83,30 +89,47 @@ func (w *fileWriter) Close() error {
 	return mc.checksum()
 }
 
+// A Writer is used for creating a new memory card image with files written to
+// it.
 type Writer struct {
 	mu sync.Mutex
 	w  io.Writer
 	mc *memoryCard
+	fw map[*fileWriter]struct{}
 }
 
-func (w *Writer) Create(name string) (io.WriteCloser, error) {
+// Create returns an io.WriteCloser for writing a new file on the memory card.
+// The file should consist of a 64 byte header followed by one or more 8 KiB
+// blocks as indicated in the header.
+func (w *Writer) Create() (io.WriteCloser, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	for _, e := range w.mc.directory[w.mc.activeDirectory()].Entries {
-		if e.isEmpty() {
-			continue
-		}
-
-		if e.filename() == name {
-			return nil, errDuplicateName
-		}
+	if w.mc.count() == maxEntries || w.mc.blockMap[w.mc.activeBlockMap()].FreeBlocks == 0 {
+		return nil, errNoFreeSpace
 	}
 
-	return &fileWriter{name, new(bytes.Buffer), w}, nil
+	fw := &fileWriter{new(bytes.Buffer), w}
+	w.fw[fw] = struct{}{}
+
+	return fw, nil
 }
 
+// Close writes out the memory card to the underlying io.Writer. Any in-flight
+// open memory card files are closed first.
 func (w *Writer) Close() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	// Close any open files
+	for fw := range w.fw {
+		if err := fw.Close(); err != nil {
+			return err
+		}
+
+		delete(w.fw, fw)
+	}
+
 	b, err := w.mc.MarshalBinary()
 	if err != nil {
 		return err
@@ -123,6 +146,8 @@ func (w *Writer) Close() error {
 	return nil
 }
 
+// NewWriter returns a Writer targeting a new blank memory card with the
+// provided capacity and encoding.
 func NewWriter(w io.Writer, capacity, encoding uint16) (*Writer, error) {
 	mc, err := newMemoryCard(capacity, encoding)
 	if err != nil {
@@ -132,5 +157,6 @@ func NewWriter(w io.Writer, capacity, encoding uint16) (*Writer, error) {
 	return &Writer{
 		w:  w,
 		mc: mc,
+		fw: make(map[*fileWriter]struct{}),
 	}, nil
 }
