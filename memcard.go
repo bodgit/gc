@@ -13,7 +13,7 @@ import (
 
 // Supported memory card sizes.
 const (
-	MemoryCard59 = 4 << iota
+	MemoryCard59 uint16 = 4 << iota
 	MemoryCard123
 	MemoryCard251
 	MemoryCard507
@@ -23,7 +23,7 @@ const (
 
 // Supported memory card encodings.
 const (
-	EncodingANSI = iota
+	EncodingANSI uint16 = iota
 	EncodingSJIS
 )
 
