@@ -21,10 +21,10 @@ const (
 //nolint:maligned
 type header struct {
 	Serial        [12]byte
-	FormatTime    uint64
+	FormatTime    uint64 // Ticks since GameCube epoch
 	CounterBias   uint32
 	Lang          uint32
-	_             [headerReserved1Size]byte
+	Unknown       [headerReserved1Size]byte // Seems to be either 0 or 1 as a uint32
 	DeviceID      uint16
 	CardSize      uint16
 	Encoding      uint16

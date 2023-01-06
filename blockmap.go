@@ -64,3 +64,11 @@ func (m *blockMap) isValid() error {
 
 	return nil
 }
+
+func newBlockMap(updateCounter, freeBlocks uint16) blockMap {
+	return blockMap{
+		UpdateCounter:      updateCounter,
+		FreeBlocks:         freeBlocks,
+		LastAllocatedBlock: reservedBlocks - 1,
+	}
+}

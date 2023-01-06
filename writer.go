@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"time"
 )
 
 var (
@@ -92,10 +93,14 @@ func (w *fileWriter) Close() error {
 // A Writer is used for creating a new memory card image with files written to
 // it.
 type Writer struct {
-	mu sync.Mutex
-	w  io.Writer
-	mc *memoryCard
-	fw map[*fileWriter]struct{}
+	mu         sync.Mutex
+	w          io.Writer
+	mc         *memoryCard
+	fw         map[*fileWriter]struct{}
+	formatTime uint64
+	flashID    [12]byte
+	cardSize   uint16
+	encoding   uint16
 }
 
 // Create returns an io.WriteCloser for writing a new file on the memory card.
@@ -146,17 +151,86 @@ func (w *Writer) Close() error {
 	return nil
 }
 
-// NewWriter returns a Writer targeting a new blank memory card with the
-// provided capacity and encoding.
-func NewWriter(w io.Writer, capacity, encoding uint16) (*Writer, error) {
-	mc, err := newMemoryCard(capacity, encoding)
+// Credit to libogc/gc/ogc/lwp_watchdog.h.
+const (
+	busClock   uint64 = 162000000
+	timerClock        = busClock / 4000
+)
+
+func now() uint64 {
+	// Number of seconds since 00:00:00, 1st January 2000, expressed as ticks
+	return timerClock * 1000 * uint64(time.Now().UTC().Sub(epoch).Seconds())
+}
+
+// NewWriter returns a Writer targeting a new blank memory card which defaults
+// to 59 block capacity, ANSI encoding and an all-zeroes Flash ID.
+func NewWriter(w io.Writer, options ...func(*Writer) error) (*Writer, error) {
+	nw := &Writer{
+		w:          w,
+		fw:         make(map[*fileWriter]struct{}),
+		formatTime: now(),
+		cardSize:   MemoryCard59,
+	}
+
+	if err := nw.setOption(options...); err != nil {
+		return nil, err
+	}
+
+	mc, err := newMemoryCard(nw.flashID, nw.formatTime, nw.cardSize, nw.encoding)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Writer{
-		w:  w,
-		mc: mc,
-		fw: make(map[*fileWriter]struct{}),
-	}, nil
+	nw.mc = mc
+
+	return nw, nil
+}
+
+func (w *Writer) setOption(options ...func(*Writer) error) error {
+	for _, option := range options {
+		if err := option(w); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// FlashID sets the 12 byte Flash ID. If the target is an official memory card
+// then this must be set correctly.
+func FlashID(flashID [12]byte) func(*Writer) error {
+	return func(w *Writer) error {
+		w.flashID = flashID
+
+		return nil
+	}
+}
+
+// FormatTime overrides the formatting time, which is expressed in seconds
+// since 00:00:00, 1st January 2000. Setting it to 0 stops the serial number
+// from being computed.
+func FormatTime(formatTime uint64) func(*Writer) error {
+	return func(w *Writer) error {
+		w.formatTime = formatTime
+
+		return nil
+	}
+}
+
+// CardSize sets the memory card capacity.
+func CardSize(cardSize uint16) func(*Writer) error {
+	return func(w *Writer) error {
+		w.cardSize = cardSize
+
+		return nil
+	}
+}
+
+// Encoding sets the memory card encoding.
+func Encoding(encoding uint16) func(*Writer) error {
+	return func(w *Writer) error {
+		w.encoding = encoding
+
+		return nil
+	}
 }
