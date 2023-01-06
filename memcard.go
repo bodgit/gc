@@ -45,8 +45,11 @@ const (
 )
 
 var (
-	errInvalidCapacity = errors.New("not a valid capacity")
-	errTrailingBytes   = errors.New("trailing bytes")
+	errInvalidBlockMapCounters  = errors.New("invalid block allocation map update counters")
+	errInvalidCapacity          = errors.New("not a valid capacity")
+	errInvalidDirectoryCounters = errors.New("invalid directory update counters")
+	errInvalidEncoding          = errors.New("not a valid encoding")
+	errTrailingBytes            = errors.New("trailing bytes")
 )
 
 type memoryCard struct {
@@ -123,6 +126,16 @@ func (mc *memoryCard) isValid() error {
 		}
 	}
 
+	diff := int(mc.directory[master].UpdateCounter) - int(mc.directory[backup].UpdateCounter)
+	if diff != 1 && diff != -1 {
+		return errInvalidDirectoryCounters
+	}
+
+	diff = int(mc.blockMap[master].UpdateCounter) - int(mc.blockMap[backup].UpdateCounter)
+	if diff != 1 && diff != -1 {
+		return errInvalidBlockMapCounters
+	}
+
 	return nil
 }
 
@@ -142,12 +155,28 @@ func validateCardSize(capacity uint16) error {
 	return nil
 }
 
+func validateEncoding(encoding uint16) error {
+	switch encoding {
+	case EncodingANSI:
+	case EncodingSJIS:
+		break
+	default:
+		return errInvalidEncoding
+	}
+
+	return nil
+}
+
 func (mc *memoryCard) unmarshalBinary(r io.Reader) error {
 	if err := binary.Read(r, binary.BigEndian, &mc.header); err != nil {
 		return fmt.Errorf("unable to read header: %w", err)
 	}
 
 	if err := validateCardSize(mc.header.CardSize); err != nil {
+		return err
+	}
+
+	if err := validateEncoding(mc.header.Encoding); err != nil {
 		return err
 	}
 
@@ -220,14 +249,21 @@ func (mc *memoryCard) MarshalBinary() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func newMemoryCard(capacity, encoding uint16) (*memoryCard, error) {
+func newMemoryCard(flashID [12]byte, formatTime uint64, capacity, encoding uint16) (*memoryCard, error) {
 	if err := validateCardSize(capacity); err != nil {
 		return nil, err
 	}
 
+	if err := validateEncoding(encoding); err != nil {
+		return nil, err
+	}
+
 	header := header{
-		CardSize: capacity,
-		Encoding: encoding,
+		Serial:        computeSerial(flashID, formatTime),
+		FormatTime:    formatTime,
+		CardSize:      capacity,
+		Encoding:      encoding,
+		UpdateCounter: 0xffff, //nolint:gomnd
 	}
 
 	freeBlocks := header.blocks() - reservedBlocks
@@ -235,24 +271,12 @@ func newMemoryCard(capacity, encoding uint16) (*memoryCard, error) {
 	mc := &memoryCard{
 		header: header,
 		directory: [copies]directory{
-			{
-				UpdateCounter: 1,
-			},
-			{
-				UpdateCounter: 1,
-			},
+			newDirectory(1),
+			newDirectory(0),
 		},
 		blockMap: [copies]blockMap{
-			{
-				UpdateCounter:      1,
-				FreeBlocks:         uint16(freeBlocks),
-				LastAllocatedBlock: reservedBlocks - 1,
-			},
-			{
-				UpdateCounter:      1,
-				FreeBlocks:         uint16(freeBlocks),
-				LastAllocatedBlock: reservedBlocks - 1,
-			},
+			newBlockMap(1, uint16(freeBlocks)),
+			newBlockMap(0, uint16(freeBlocks)),
 		},
 	}
 

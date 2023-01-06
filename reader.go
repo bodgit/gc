@@ -144,6 +144,7 @@ type Reader struct {
 
 	mc *memoryCard
 
+	FlashID  [12]byte
 	CardSize uint16
 	Encoding uint16
 
@@ -157,6 +158,8 @@ func (r *Reader) init(nr io.Reader) error {
 	if err := r.mc.unmarshalBinary(nr); err != nil {
 		return err
 	}
+
+	r.FlashID = extractFlashID(r.mc.header.Serial, r.mc.header.FormatTime)
 
 	r.CardSize, r.Encoding = r.mc.header.CardSize, r.mc.header.Encoding
 

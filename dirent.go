@@ -41,10 +41,7 @@ type entry struct {
 }
 
 func (e *entry) isEmpty() bool {
-	e1 := bytes.Equal(e.GameCode[:], []byte{0xff, 0xff, 0xff, 0xff})
-	e2 := bytes.Equal(e.GameCode[:], []byte{0x00, 0x00, 0x00, 0x00})
-
-	return e1 || e2
+	return *e == newEntry()
 }
 
 func (e *entry) gameCode() string {
@@ -80,6 +77,14 @@ func (e *entry) MarshalBinary() ([]byte, error) {
 	return b, nil
 }
 
+func newEntry() entry {
+	e := entry{}
+
+	_ = binary.Read(plumbing.FillReader(0xff), binary.BigEndian, &e) //nolint:gomnd
+
+	return e
+}
+
 const (
 	maxEntries             = 127
 	directoryReserved1Size = 0x003a
@@ -97,10 +102,7 @@ func (d *directory) MarshalBinary() ([]byte, error) {
 	buf.Grow(binary.Size(d))
 
 	for _, e := range d.Entries {
-		b, err := e.MarshalBinary()
-		if err != nil {
-			return nil, err
-		}
+		b, _ := e.MarshalBinary()
 
 		_, _ = buf.Write(b)
 	}
@@ -151,4 +153,16 @@ func (d *directory) isValid() error {
 	}
 
 	return nil
+}
+
+func newDirectory(updateCounter uint16) directory {
+	d := directory{}
+
+	for i := range d.Entries {
+		d.Entries[i] = newEntry()
+	}
+
+	d.UpdateCounter = updateCounter
+
+	return d
 }
