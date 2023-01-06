@@ -9,9 +9,4 @@
 gc
 ==
 
-A collection of libraries and utilities for dealing with Nintendo GameCube file formats.
-
-Full installation:
-```
-go get github.com/bodgit/gc/...
-```
+A library for reading and writing Nintendo GameCube memory card images.
