@@ -61,6 +61,18 @@ func (h *header) blocks() int {
 	return int(h.CardSize) << 4 //nolint:gomnd
 }
 
+func (h *header) serialNumbers() (uint32, uint32) {
+	buf := new(bytes.Buffer)
+	buf.Grow(binary.Size(h))
+
+	_ = binary.Write(buf, binary.BigEndian, h)
+
+	serial := make([]uint32, 8) //nolint:gomnd
+	_ = binary.Read(buf, binary.BigEndian, &serial)
+
+	return serial[0] ^ serial[2] ^ serial[4] ^ serial[6], serial[1] ^ serial[3] ^ serial[5] ^ serial[7]
+}
+
 func (h *header) generateChecksums() ([]byte, []byte, error) {
 	b, err := h.MarshalBinary()
 	if err != nil {

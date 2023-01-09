@@ -36,6 +36,13 @@ func (w *fileWriter) Write(p []byte) (int, error) {
 	return w.buf.Write(p) //nolint:wrapcheck
 }
 
+var gamePatches = map[string]func(io.Reader, *memoryCard) (io.Reader, error){
+	"f_zero.dat":  patchFZero,
+	"PSO_SYSTEM":  patchPSO12,
+	"PSO3_SYSTEM": patchPSO3,
+}
+
+//nolint:cyclop,funlen
 func (w *fileWriter) Close() error {
 	w.w.mu.Lock()
 	defer w.w.mu.Unlock()
@@ -67,13 +74,25 @@ func (w *fileWriter) Close() error {
 		return errNoFreeSpace
 	}
 
+	var (
+		r   io.Reader = w.buf
+		err error
+	)
+
+	patchFunc, ok := gamePatches[e.filename()]
+	if ok {
+		if r, err = patchFunc(w.buf, mc); err != nil {
+			return err
+		}
+	}
+
 	// Set e.FirstBlock to the correct location
 	e.FirstBlock = mc.blockMap[mc.activeBlockMap()].LastAllocatedBlock + 1
 
 	// Write out the blocks
 	lastBlock := e.FirstBlock + e.FileLength - reservedBlocks
 	for i := e.FirstBlock - reservedBlocks; i < lastBlock; i++ {
-		_, _ = w.buf.Read(mc.blocks[i][:])
+		_, _ = r.Read(mc.blocks[i][:])
 
 		if i+1 < lastBlock {
 			mc.blockMap[mc.activeBlockMap()].Blocks[i] = i + reservedBlocks + 1
