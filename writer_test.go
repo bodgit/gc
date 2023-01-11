@@ -17,7 +17,7 @@ func TestNewWriter(t *testing.T) {
 
 	buf := new(bytes.Buffer)
 
-	wc, err := gc.NewWriter(buf, gc.FormatTime(0), gc.CardSize(gc.MemoryCard59), gc.Encoding(gc.EncodingANSI))
+	wc, err := gc.NewWriter(buf, gc.FormatTime(0))
 	if err != nil {
 		t.Fatal(err)
 	}
