@@ -1,32 +1,32 @@
-package gc
+package gc_test
 
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/binary"
 	"fmt"
 	"io"
 	"path/filepath"
 	"testing"
 
+	"github.com/bodgit/gc"
 	"github.com/stretchr/testify/assert"
 )
 
-func copyData(f *File, wc *Writer) ([]byte, error) {
+func copyData(f *gc.File, wc *gc.Writer) ([]byte, error) {
 	fr, err := f.Open()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to open: %w", err)
 	}
 	defer fr.Close()
 
 	fw, err := wc.Create()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to create: %w", err)
 	}
 	defer fw.Close()
 
 	// Skip header in checksum calculation
-	if _, err := io.CopyN(fw, fr, int64(binary.Size(entry{}))); err != nil {
+	if _, err := io.CopyN(fw, fr, 64); err != nil {
 		return nil, fmt.Errorf("unable to copy save header: %w", err)
 	}
 
@@ -47,7 +47,7 @@ func copyData(f *File, wc *Writer) ([]byte, error) {
 func TestPatches(t *testing.T) {
 	t.Parallel()
 
-	rc, err := OpenReader(filepath.Join("testdata", "patches.raw"))
+	rc, err := gc.OpenReader(filepath.Join("testdata", "patches.raw"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestPatches(t *testing.T) {
 
 	// Time needs to be set and non-zero to generate a static non-zero
 	// serial number
-	wc, err := NewWriter(buf, FormatTime(1))
+	wc, err := gc.NewWriter(buf, gc.FormatTime(1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestPatches(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r, err := NewReader(buf)
+	r, err := gc.NewReader(buf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestPatches(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if _, err := io.CopyN(io.Discard, fr, int64(binary.Size(entry{}))); err != nil {
+		if _, err := io.CopyN(io.Discard, fr, 64); err != nil {
 			t.Fatal(err)
 		}
 
