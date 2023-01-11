@@ -93,6 +93,10 @@ func (mc *memoryCard) count() int {
 	return count
 }
 
+func (mc *memoryCard) serialNumbers() (uint32, uint32) {
+	return mc.header.serialNumbers()
+}
+
 func (mc *memoryCard) checksum() error {
 	if err := mc.header.checksum(); err != nil {
 		return err
