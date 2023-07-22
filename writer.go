@@ -36,6 +36,7 @@ func (w *fileWriter) Write(p []byte) (int, error) {
 	return w.buf.Write(p) //nolint:wrapcheck
 }
 
+//nolint:gochecknoglobals
 var gamePatches = map[string]func(io.Reader, *memoryCard) (io.Reader, error){
 	"f_zero.dat":  patchFZero,
 	"PSO_SYSTEM":  patchPSO12,

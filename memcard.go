@@ -210,11 +210,7 @@ func (mc *memoryCard) unmarshalBinary(r io.Reader) error {
 func (mc *memoryCard) UnmarshalBinary(b []byte) error {
 	r := bytes.NewReader(b)
 
-	if err := mc.unmarshalBinary(r); err != nil {
-		return err
-	}
-
-	return nil
+	return mc.unmarshalBinary(r)
 }
 
 func (mc *memoryCard) MarshalBinary() ([]byte, error) {
